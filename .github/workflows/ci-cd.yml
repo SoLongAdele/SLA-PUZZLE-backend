@@ -1,0 +1,268 @@
+name: 拼图大师后端 CI/CD
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  NODE_VERSION: '18.x'
+  
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: rootpassword
+          MYSQL_DATABASE: sla_puzzle_test
+          MYSQL_USER: test_user
+          MYSQL_PASSWORD: test_password
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=3
+
+    steps:
+    - name: 检出代码
+      uses: actions/checkout@v3
+
+    - name: 设置 Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: ${{ env.NODE_VERSION }}
+        cache: 'npm'
+
+    - name: 安装依赖
+      run: npm ci
+
+    - name: 等待 MySQL 启动
+      run: |
+        while ! mysqladmin ping -h"127.0.0.1" -P3306 -uroot -prootpassword --silent; do
+          echo "等待 MySQL..."
+          sleep 2
+        done
+
+    - name: 运行测试
+      env:
+        NODE_ENV: test
+        DB_HOST: 127.0.0.1
+        DB_PORT: 3306
+        DB_NAME: sla_puzzle_test
+        DB_USER: test_user
+        DB_PASSWORD: test_password
+        JWT_SECRET: test-jwt-secret-key
+      run: |
+        npm run migrate
+        npm test
+
+    - name: 代码覆盖率上传
+      uses: codecov/codecov-action@v3
+      with:
+        file: ./coverage/lcov.info
+        fail_ci_if_error: false
+
+  lint:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: 检出代码
+      uses: actions/checkout@v3
+
+    - name: 设置 Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: ${{ env.NODE_VERSION }}
+        cache: 'npm'
+
+    - name: 安装依赖
+      run: npm ci
+
+    - name: 运行 ESLint
+      run: npx eslint src/ --ext .js --format json --output-file eslint-report.json || true
+
+    - name: 上传 ESLint 报告
+      uses: actions/upload-artifact@v3
+      with:
+        name: eslint-report
+        path: eslint-report.json
+
+  security:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: 检出代码
+      uses: actions/checkout@v3
+
+    - name: 设置 Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: ${{ env.NODE_VERSION }}
+        cache: 'npm'
+
+    - name: 安装依赖
+      run: npm ci
+
+    - name: 运行安全审计
+      run: npm audit --audit-level=moderate
+
+    - name: 运行 Snyk 安全扫描
+      uses: snyk/actions/node@master
+      continue-on-error: true
+      env:
+        SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+      with:
+        args: --severity-threshold=high
+
+  build:
+    runs-on: ubuntu-latest
+    needs: [test, lint]
+    
+    steps:
+    - name: 检出代码
+      uses: actions/checkout@v3
+
+    - name: 设置 Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: ${{ env.NODE_VERSION }}
+        cache: 'npm'
+
+    - name: 安装依赖
+      run: npm ci --production
+
+    - name: 创建部署包
+      run: |
+        mkdir -p dist
+        cp -r src dist/
+        cp package*.json dist/
+        cp README.md dist/
+        cd dist && npm ci --production
+
+    - name: 上传构建产物
+      uses: actions/upload-artifact@v3
+      with:
+        name: build-artifact
+        path: dist/
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs: [build, security]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    
+    steps:
+    - name: 下载构建产物
+      uses: actions/download-artifact@v3
+      with:
+        name: build-artifact
+        path: dist/
+
+    - name: 部署到服务器
+      uses: appleboy/ssh-action@v0.1.5
+      with:
+        host: ${{ secrets.DEPLOY_HOST }}
+        username: ${{ secrets.DEPLOY_USER }}
+        key: ${{ secrets.DEPLOY_KEY }}
+        port: ${{ secrets.DEPLOY_PORT }}
+        script: |
+          # 停止现有服务
+          pm2 stop puzzle-master-backend || true
+          
+          # 备份当前版本
+          if [ -d "/var/www/puzzle-master-backend" ]; then
+            mv /var/www/puzzle-master-backend /var/www/puzzle-master-backend-backup-$(date +%Y%m%d%H%M%S)
+          fi
+          
+          # 创建新目录
+          mkdir -p /var/www/puzzle-master-backend
+          
+          # 等待文件上传完成
+          sleep 5
+
+    - name: 上传文件到服务器
+      uses: appleboy/scp-action@v0.1.4
+      with:
+        host: ${{ secrets.DEPLOY_HOST }}
+        username: ${{ secrets.DEPLOY_USER }}
+        key: ${{ secrets.DEPLOY_KEY }}
+        port: ${{ secrets.DEPLOY_PORT }}
+        source: "dist/*"
+        target: "/var/www/puzzle-master-backend/"
+        strip_components: 1
+
+    - name: 启动服务
+      uses: appleboy/ssh-action@v0.1.5
+      with:
+        host: ${{ secrets.DEPLOY_HOST }}
+        username: ${{ secrets.DEPLOY_USER }}
+        key: ${{ secrets.DEPLOY_KEY }}
+        port: ${{ secrets.DEPLOY_PORT }}
+        script: |
+          cd /var/www/puzzle-master-backend
+          
+          # 设置环境变量
+          cat > .env << EOF
+          NODE_ENV=production
+          PORT=3001
+          DB_HOST=${{ secrets.DB_HOST }}
+          DB_PORT=${{ secrets.DB_PORT }}
+          DB_NAME=${{ secrets.DB_NAME }}
+          DB_USER=${{ secrets.DB_USER }}
+          DB_PASSWORD=${{ secrets.DB_PASSWORD }}
+          JWT_SECRET=${{ secrets.JWT_SECRET }}
+          JWT_EXPIRES_IN=7d
+          CORS_ORIGIN=${{ secrets.CORS_ORIGIN }}
+          LOG_LEVEL=info
+          BCRYPT_ROUNDS=12
+          RATE_LIMIT_WINDOW_MS=900000
+          RATE_LIMIT_MAX_REQUESTS=100
+          EOF
+          
+          # 运行数据库迁移
+          node src/scripts/migrate.js
+          
+          # 启动服务
+          pm2 start src/app.js --name puzzle-master-backend --env production
+          
+          # 保存PM2配置
+          pm2 save
+
+    - name: 健康检查
+      run: |
+        sleep 30
+        curl -f http://${{ secrets.DEPLOY_HOST }}:3001/health || exit 1
+
+    - name: 通知部署结果
+      if: always()
+      uses: 8398a7/action-slack@v3
+      with:
+        status: ${{ job.status }}
+        channel: '#deployments'
+        webhook_url: ${{ secrets.SLACK_WEBHOOK }}
+        fields: repo,message,commit,author,action,eventName,ref,workflow
+      env:
+        SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK }}
+
+  cleanup:
+    runs-on: ubuntu-latest
+    needs: [deploy]
+    if: always()
+    
+    steps:
+    - name: 清理旧的备份文件
+      uses: appleboy/ssh-action@v0.1.5
+      with:
+        host: ${{ secrets.DEPLOY_HOST }}
+        username: ${{ secrets.DEPLOY_USER }}
+        key: ${{ secrets.DEPLOY_KEY }}
+        port: ${{ secrets.DEPLOY_PORT }}
+        script: |
+          # 只保留最近3个备份
+          cd /var/www
+          ls -dt puzzle-master-backend-backup-* 2>/dev/null | tail -n +4 | xargs rm -rf
