@@ -1,3 +1,4 @@
+require('dotenv').config();
 const { connectDB, query } = require('../config/database');
 const { logger } = require('../utils/logger');
 const bcrypt = require('bcryptjs');

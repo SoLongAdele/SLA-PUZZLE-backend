@@ -19,12 +19,34 @@ const authenticateToken = async (req, res, next) => {
 
     // 验证JWT token
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    logger.info(`Token解析结果: userId=${decoded.userId}, token前10个字符=${token.substring(0, 10)}...`);
     
     // 查询用户信息
     const users = await query(
-      'SELECT u.*, us.* FROM users u LEFT JOIN user_stats us ON u.id = us.user_id WHERE u.id = ? AND u.is_active = TRUE',
+      `SELECT 
+        u.id as user_id,
+        u.username,
+        u.email,
+        u.password_hash,
+        u.avatar,
+        u.avatar_frame,
+        u.created_at,
+        u.updated_at,
+        u.last_login_at,
+        u.is_active,
+        us.level,
+        us.experience,
+        us.coins,
+        us.total_score,
+        us.games_completed,
+        us.total_play_time
+      FROM users u 
+      LEFT JOIN user_stats us ON u.id = us.user_id 
+      WHERE u.id = ? AND u.is_active = TRUE`,
       [decoded.userId]
     );
+    
+    logger.info(`用户查询结果: 找到${users.length}个用户，查询ID=${decoded.userId}`);
 
     if (users.length === 0) {
       return res.status(401).json({
@@ -35,7 +57,7 @@ const authenticateToken = async (req, res, next) => {
 
     // 将用户信息添加到请求对象
     req.user = {
-      id: users[0].id,
+      id: users[0].user_id,  // 使用明确的字段名
       username: users[0].username,
       email: users[0].email,
       avatar: users[0].avatar,
@@ -47,6 +69,7 @@ const authenticateToken = async (req, res, next) => {
       gamesCompleted: users[0].games_completed || 0,
       totalPlayTime: users[0].total_play_time || 0
     };
+    
 
     next();
   } catch (error) {
@@ -86,13 +109,32 @@ const optionalAuth = async (req, res, next) => {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     
     const users = await query(
-      'SELECT u.*, us.* FROM users u LEFT JOIN user_stats us ON u.id = us.user_id WHERE u.id = ? AND u.is_active = TRUE',
+      `SELECT 
+        u.id as user_id,
+        u.username,
+        u.email,
+        u.password_hash,
+        u.avatar,
+        u.avatar_frame,
+        u.created_at,
+        u.updated_at,
+        u.last_login_at,
+        u.is_active,
+        us.level,
+        us.experience,
+        us.coins,
+        us.total_score,
+        us.games_completed,
+        us.total_play_time
+      FROM users u 
+      LEFT JOIN user_stats us ON u.id = us.user_id 
+      WHERE u.id = ? AND u.is_active = TRUE`,
       [decoded.userId]
     );
 
     if (users.length > 0) {
       req.user = {
-        id: users[0].id,
+        id: users[0].user_id,  // 使用明确的字段名
         username: users[0].username,
         email: users[0].email,
         avatar: users[0].avatar,

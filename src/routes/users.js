@@ -303,6 +303,8 @@ router.post('/acquire-item', authenticateToken, asyncHandler(async (req, res) =>
   const userId = req.user.id;
   const { itemType, itemId, cost = 0 } = req.body;
   
+  logger.info(`用户购买物品请求: userId=${userId}, itemType=${itemType}, itemId=${itemId}, cost=${cost}`);
+  
   if (!itemType || !itemId) {
     return res.status(400).json({
       success: false,
@@ -337,7 +339,10 @@ router.post('/acquire-item', authenticateToken, asyncHandler(async (req, res) =>
         [userId]
       );
       
+      logger.info(`用户金币检查: userId=${userId}, 查询到${userStats.length}条记录, 当前金币=${userStats[0]?.coins || 'N/A'}, 需要金币=${cost}`);
+      
       if (userStats.length === 0 || userStats[0].coins < cost) {
+        logger.warn(`用户金币不足: userId=${userId}, 当前金币=${userStats[0]?.coins || 0}, 需要金币=${cost}`);
         throw new Error('金币不足');
       }
       

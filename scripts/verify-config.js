@@ -80,8 +80,7 @@ async function testDatabaseConnection() {
     
     // 检查是否存在我们的表
     const [tables] = await connection.execute(
-      'SHOW TABLES LIKE ?', 
-      ['users']
+      'SHOW TABLES LIKE "users"'
     );
     
     if (tables.length === 0) {

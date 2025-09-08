@@ -11,7 +11,7 @@ const authRoutes = require('./routes/auth');
 const userRoutes = require('./routes/users');
 const achievementRoutes = require('./routes/achievements');
 const gameRoutes = require('./routes/games');
-const errorHandler = require('./middleware/errorHandler');
+const { errorHandler } = require('./middleware/errorHandler');
 const { logger } = require('./utils/logger');
 
 const app = express();
@@ -35,7 +35,7 @@ app.use(morgan('combined', {
 
 // CORS配置
 app.use(cors({
-  origin: process.env.CORS_ORIGIN || 'http://localhost:5173',
+  origin: process.env.CORS_ORIGIN || 'http://localhost:1420',
   credentials: true
 }));
 

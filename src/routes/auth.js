@@ -156,6 +156,7 @@ router.post('/login', validateLogin, asyncHandler(async (req, res) => {
   const token = generateToken(user.id);
   
   logger.info(`用户登录成功: ${username} (${user.id})`);
+  logger.info(`生成Token: userId=${user.id}, token前10个字符=${token.substring(0, 10)}...`);
   
   res.json({
     success: true,
