@@ -1,0 +1,101 @@
+name: Deploy to Production
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:   
+  deploy:
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        
+    - name: Setup pnpm
+      uses: pnpm/action-setup@v2
+      with:
+        version: 8
+        
+    - name: Install dependencies
+      run: pnpm install
+      
+    - name: Build application
+      run: pnpm build
+      
+    - name: Create .env file
+      run: |
+        # 生成.env文件
+        echo "DB_HOST=${{ secrets.DB_HOST }}" >> dist/.env
+        echo "DB_PORT=${{ secrets.DB_PORT }}" >> dist/.env
+        echo "DB_USER=${{ secrets.DB_USER }}" >> dist/.env
+        echo "DB_PASSWORD=${{ secrets.DB_PASSWORD }}" >> dist/.env
+        echo "DB_NAME=${{ secrets.DB_NAME }}" >> dist/.env
+        echo "PORT=${{ secrets.PORT }}" >> dist/.env
+        echo "JWT_SECRET=${{ secrets.JWT_SECRET }}" >> dist/.env
+        echo "NODE_ENV=${{ secrets.NODE_ENV }}" >> dist/.env
+        echo "JWT_EXPIRES_IN=${{ secrets.JWT_EXPIRES_IN }}" >> dist/.env
+        echo "CORS_ORIGIN=${{ secrets.CORS_ORIGIN }}" >> dist/.env
+        
+    - name: Copy package.json to dist
+      run: cp package.json dist/
+        
+    - name: Deploy to server
+      uses: appleboy/ssh-action@v1.0.3
+      with:
+        host: ${{ secrets.SERVER_HOST }}
+        username: ${{ secrets.SERVER_USER }}
+        password: ${{ secrets.SERVER_PASSWORD }}
+        script: |
+          # 创建目录（如果不存在）
+          sudo mkdir -p /srv/sla-puzzle
+          sudo chown ${{ secrets.SERVER_USER }}:${{ secrets.SERVER_USER }} /srv/sla-puzzle
+          
+          # 备份当前版本（如果存在）
+          if [ -f /srv/sla-puzzle/src/app.js ]; then
+            sudo cp /srv/sla-puzzle/src/app.js /srv/sla-puzzle/src/app.js.backup.$(date +%Y%m%d_%H%M%S)
+          fi
+          
+    - name: Copy files to server
+      uses: appleboy/scp-action@v0.1.7
+      with:
+        host: ${{ secrets.SERVER_HOST }}
+        username: ${{ secrets.SERVER_USER }}
+        password: ${{ secrets.SERVER_PASSWORD }}
+        source: "dist/*"
+        target: "/srv/sla-puzzle/"
+        strip_components: 1
+        
+    - name: Install dependencies and start application
+      uses: appleboy/ssh-action@v1.0.3
+      with:
+        host: ${{ secrets.SERVER_HOST }}
+        username: ${{ secrets.SERVER_USER }}
+        password: ${{ secrets.SERVER_PASSWORD }}
+        script: |
+          cd /srv/sla-puzzle
+          
+          # 安装生产依赖
+          pnpm install --prod
+          
+          # 尝试重启，如果失败则启动新实例
+          if pm2 restart puzzle-master-backend; then
+            echo "Application restarted successfully"
+          else
+            echo "Restart failed, starting new instance"
+            pm2 start src/app.js --name puzzle-master-backend --env production
+          fi
+          
+          # 保存PM2配置
+          pm2 save
+          
+          # 显示状态
+          pm2 status
+          pm2 logs puzzle-master-backend --lines 10
