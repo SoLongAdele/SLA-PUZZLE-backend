@@ -36,9 +36,9 @@ jobs:
         echo "DB_HOST=${{ secrets.DB_HOST }}" >> dist/.env
         echo "DB_PORT=${{ secrets.DB_PORT }}" >> dist/.env
         echo "DB_USER=${{ secrets.DB_USER }}" >> dist/.env
-        echo "DB_PASSWORD=${{ secrets.DB_PASSWORD }}" >> dist/.env
+        echo "DB_PASSWORD=\"${{ secrets.DB_PASSWORD }}\"" >> dist/.env
         echo "DB_NAME=${{ secrets.DB_NAME }}" >> dist/.env
-        echo "PORT=${{ secrets.PORT }}" >> dist/.env
+        echo "PORT=${{ secrets.APP_PORT }}" >> dist/.env
         echo "JWT_SECRET=${{ secrets.JWT_SECRET }}" >> dist/.env
         echo "NODE_ENV=${{ secrets.NODE_ENV }}" >> dist/.env
         echo "JWT_EXPIRES_IN=${{ secrets.JWT_EXPIRES_IN }}" >> dist/.env
@@ -52,15 +52,14 @@ jobs:
       with:
         host: ${{ secrets.SERVER_HOST }}
         username: ${{ secrets.SERVER_USER }}
-        password: ${{ secrets.SERVER_PASSWORD }}
+        key: ${{ secrets.SSH_KEY }}
         script: |
           # 创建目录（如果不存在）
-          sudo mkdir -p /srv/sla-puzzle
-          sudo chown ${{ secrets.SERVER_USER }}:${{ secrets.SERVER_USER }} /srv/sla-puzzle
+          mkdir -p /srv/sla-puzzle
           
           # 备份当前版本（如果存在）
           if [ -f /srv/sla-puzzle/src/app.js ]; then
-            sudo cp /srv/sla-puzzle/src/app.js /srv/sla-puzzle/src/app.js.backup.$(date +%Y%m%d_%H%M%S)
+            cp /srv/sla-puzzle/src/app.js /srv/sla-puzzle/src/app.js.backup.$(date +%Y%m%d_%H%M%S)
           fi
           
     - name: Copy files to server
@@ -68,7 +67,7 @@ jobs:
       with:
         host: ${{ secrets.SERVER_HOST }}
         username: ${{ secrets.SERVER_USER }}
-        password: ${{ secrets.SERVER_PASSWORD }}
+        key: ${{ secrets.SSH_KEY }}
         source: "dist/*"
         target: "/srv/sla-puzzle/"
         strip_components: 1
@@ -78,9 +77,11 @@ jobs:
       with:
         host: ${{ secrets.SERVER_HOST }}
         username: ${{ secrets.SERVER_USER }}
-        password: ${{ secrets.SERVER_PASSWORD }}
+        key: ${{ secrets.SSH_KEY }}
         script: |
           cd /srv/sla-puzzle
+
+          source ~/.bashrc
           
           # 安装生产依赖
           pnpm install --prod
@@ -98,4 +99,3 @@ jobs:
           
           # 显示状态
           pm2 status
-          pm2 logs puzzle-master-backend --lines 10
