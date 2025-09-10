@@ -203,6 +203,81 @@ const migrations = [
         INDEX idx_config_key (config_key)
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
     `
+  },
+  {
+    name: '创建联机对战房间表',
+    sql: `
+      CREATE TABLE IF NOT EXISTS multiplayer_rooms (
+        id VARCHAR(36) PRIMARY KEY,
+        room_code VARCHAR(8) UNIQUE NOT NULL,
+        room_name VARCHAR(100) NOT NULL,
+        host_user_id VARCHAR(36) NOT NULL,
+        max_players INT DEFAULT 2,
+        current_players INT DEFAULT 1,
+        status ENUM('waiting', 'ready', 'playing', 'finished', 'closed') DEFAULT 'waiting',
+        puzzle_config JSON NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        game_started_at TIMESTAMP NULL,
+        game_finished_at TIMESTAMP NULL,
+        FOREIGN KEY (host_user_id) REFERENCES users(id) ON DELETE CASCADE,
+        INDEX idx_room_code (room_code),
+        INDEX idx_host_user_id (host_user_id),
+        INDEX idx_status (status),
+        INDEX idx_created_at (created_at DESC)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+    `
+  },
+  {
+    name: '创建房间玩家表',
+    sql: `
+      CREATE TABLE IF NOT EXISTS room_players (
+        id INT PRIMARY KEY AUTO_INCREMENT,
+        room_id VARCHAR(36) NOT NULL,
+        user_id VARCHAR(36) NOT NULL,
+        username VARCHAR(50) NOT NULL,
+        player_status ENUM('joined', 'ready', 'playing', 'finished', 'disconnected') DEFAULT 'joined',
+        is_host BOOLEAN DEFAULT FALSE,
+        completion_time INT NULL,
+        moves_count INT DEFAULT 0,
+        game_score INT DEFAULT 0,
+        rank_position INT NULL,
+        joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        ready_at TIMESTAMP NULL,
+        finished_at TIMESTAMP NULL,
+        FOREIGN KEY (room_id) REFERENCES multiplayer_rooms(id) ON DELETE CASCADE,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+        UNIQUE KEY unique_room_user (room_id, user_id),
+        INDEX idx_room_id (room_id),
+        INDEX idx_user_id (user_id),
+        INDEX idx_player_status (player_status)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+    `
+  },
+  {
+    name: '创建联机对战记录表',
+    sql: `
+      CREATE TABLE IF NOT EXISTS multiplayer_game_records (
+        id VARCHAR(36) PRIMARY KEY,
+        room_id VARCHAR(36) NOT NULL,
+        room_code VARCHAR(8) NOT NULL,
+        game_mode ENUM('versus', 'cooperative') DEFAULT 'versus',
+        total_players INT NOT NULL,
+        winner_user_id VARCHAR(36) NULL,
+        game_duration INT NOT NULL,
+        puzzle_difficulty ENUM('easy', 'medium', 'hard', 'expert') NOT NULL,
+        puzzle_grid_size VARCHAR(10) NOT NULL,
+        game_status ENUM('completed', 'abandoned', 'timeout') DEFAULT 'completed',
+        started_at TIMESTAMP NOT NULL,
+        finished_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (room_id) REFERENCES multiplayer_rooms(id) ON DELETE CASCADE,
+        FOREIGN KEY (winner_user_id) REFERENCES users(id) ON DELETE SET NULL,
+        INDEX idx_room_id (room_id),
+        INDEX idx_winner_user_id (winner_user_id),
+        INDEX idx_game_status (game_status),
+        INDEX idx_finished_at (finished_at DESC)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+    `
   }
 ];
 
