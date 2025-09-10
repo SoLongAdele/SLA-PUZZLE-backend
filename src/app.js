@@ -11,6 +11,7 @@ const authRoutes = require('./routes/auth');
 const userRoutes = require('./routes/users');
 const achievementRoutes = require('./routes/achievements');
 const gameRoutes = require('./routes/games');
+const multiplayerRoutes = require('./routes/multiplayer');
 const { errorHandler } = require('./middleware/errorHandler');
 const { logger } = require('./utils/logger');
 
@@ -33,22 +34,47 @@ app.use(morgan('combined', {
   }
 }));
 
-// CORS配置
+// CORS配置 - 支持多个前端域名
+const allowedOrigins = [
+  'http://localhost:1420',  // Tauri开发环境
+  'http://localhost:5173',  // Vite开发服务器
+  'http://localhost:3000',  // 其他可能的开发端口
+  'http://localhost:4173',  // Vite预览服务器
+];
+
 app.use(cors({
-  origin: process.env.CORS_ORIGIN || 'http://localhost:1420',
-  credentials: true
+  origin: function (origin, callback) {
+    // 允许没有origin的请求（如移动应用、Postman等）
+    if (!origin) return callback(null, true);
+    
+    // 检查是否在允许的域名列表中
+    if (allowedOrigins.indexOf(origin) !== -1) {
+      callback(null, true);
+    } else {
+      // 在开发环境中，允许所有localhost请求
+      if ((process.env.NODE_ENV === 'development' || !process.env.NODE_ENV) && origin.includes('localhost')) {
+        callback(null, true);
+      } else {
+        console.log('CORS blocked origin:', origin);
+        callback(new Error('Not allowed by CORS'));
+      }
+    }
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
 }));
 
-// API限流
-const limiter = rateLimit({
-  windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000, // 15分钟
-  max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS) || 100, // 限制每个IP最多100次请求
-  message: {
-    error: 'Too many requests from this IP, please try again later.',
-    code: 'RATE_LIMIT_EXCEEDED'
-  }
-});
-app.use('/api/', limiter);
+// API限流 - 在测试阶段暂时禁用
+// const limiter = rateLimit({
+//   windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000, // 15分钟
+//   max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS) || 100, // 限制每个IP最多100次请求
+//   message: {
+//     error: 'Too many requests from this IP, please try again later.',
+//     code: 'RATE_LIMIT_EXCEEDED'
+//   }
+// });
+// app.use('/api/', limiter);
 
 // 解析JSON请求体
 app.use(express.json({ limit: '10mb' }));
@@ -68,6 +94,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/achievements', achievementRoutes);
 app.use('/api/games', gameRoutes);
+app.use('/api/multiplayer', multiplayerRoutes);
 
 // 根路径
 app.get('/', (req, res) => {
