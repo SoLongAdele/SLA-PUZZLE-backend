@@ -88,25 +88,6 @@ router.post('/rooms', authenticateToken, [
     const userId = req.user.id;
     const username = req.user.username;
 
-    // 检查用户是否已经在其他房间中
-    const existingRoomCheck = await query(
-      `SELECT r.id, r.room_code, r.status 
-       FROM multiplayer_rooms r 
-       JOIN room_players rp ON r.id = rp.room_id 
-       WHERE rp.user_id = ? AND r.status IN ('waiting', 'ready', 'playing')`,
-      [userId]
-    );
-
-    if (existingRoomCheck.length > 0) {
-      return res.status(400).json({
-        error: 'User already in another active room',
-        currentRoom: {
-          roomCode: existingRoomCheck[0].room_code,
-          status: existingRoomCheck[0].status
-        }
-      });
-    }
-
     // 生成唯一房间代码
     const roomCode = await generateUniqueRoomCode();
     const roomId = generateUUID();
