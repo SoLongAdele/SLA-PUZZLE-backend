@@ -39,41 +39,73 @@ app.use(morgan('combined', {
   }
 }));
 
-// CORS配置 - 支持多个前端域名
-const allowedOrigins = [
-  'http://localhost:1420',    // Tauri开发环境
-  'http://localhost:5173',    // Vite开发服务器
-  'http://localhost:3000',    // 其他可能的开发端口
-  'http://localhost:4173',    // Vite预览服务器
-  'http://sla.edev.uno',      // 生产环境域名
-  'https://sla.edev.uno',     // HTTPS版本
-];
+// CORS配置 - 从环境变量获取允许的域名
+const getCorsOrigins = () => {
+  const corsOrigin = process.env.CORS_ORIGIN;
+  if (corsOrigin) {
+    // 从环境变量解析，去重并过滤空值
+    return [...new Set(corsOrigin.split(',').map(origin => origin.trim()).filter(Boolean))];
+  }
+  
+  // 默认配置
+  return [
+    'http://localhost:1420',    // Tauri开发环境
+    'http://localhost:5173',    // Vite开发服务器
+    'http://localhost:3000',    // 其他可能的开发端口
+    'http://localhost:4173',    // Vite预览服务器
+    'http://sla.edev.uno',      // 生产环境域名
+    'https://sla.edev.uno',     // HTTPS版本
+  ];
+};
+
+const allowedOrigins = getCorsOrigins();
+console.log('CORS允许的域名:', allowedOrigins);
+
+// 防止重复CORS头的中间件
+app.use((req, res, next) => {
+  // 移除可能已存在的CORS头，防止重复
+  res.removeHeader('Access-Control-Allow-Origin');
+  res.removeHeader('Access-Control-Allow-Methods');
+  res.removeHeader('Access-Control-Allow-Headers');
+  res.removeHeader('Access-Control-Allow-Credentials');
+  next();
+});
 
 app.use(cors({
   origin: function (origin, callback) {
+    logger.info(`CORS请求 - Origin: ${origin || '无'}`);
+    
     // 允许没有origin的请求（如移动应用、Postman等）
-    if (!origin) return callback(null, true);
+    if (!origin) {
+      logger.info('CORS: 允许无Origin请求');
+      return callback(null, true);
+    }
     
     // 检查是否在允许的域名列表中
-    if (allowedOrigins.indexOf(origin) !== -1) {
+    if (allowedOrigins.includes(origin)) {
+      logger.info(`CORS: 允许已配置域名 ${origin}`);
       callback(null, true);
     } else {
       // 支持 Tauri 应用的自定义协议
       if (origin && origin.startsWith('tauri://')) {
+        logger.info(`CORS: 允许Tauri协议 ${origin}`);
         callback(null, true);
       }
       // 在开发环境中，允许所有localhost请求
       else if ((process.env.NODE_ENV === 'development' || !process.env.NODE_ENV) && origin.includes('localhost')) {
+        logger.info(`CORS: 开发环境允许localhost ${origin}`);
         callback(null, true);
       } else {
-        console.log('CORS blocked origin:', origin);
+        logger.warn(`CORS: 阻止未授权域名 ${origin}`);
         callback(new Error('Not allowed by CORS'));
       }
     }
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+  preflightContinue: false,
+  optionsSuccessStatus: 204
 }));
 
 // API限流 - 在测试阶段暂时禁用
