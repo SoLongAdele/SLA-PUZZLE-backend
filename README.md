@@ -69,6 +69,8 @@ npm run seed
 ```
 
 ### 启动服务器
+
+#### HTTP模式（默认）
 ```bash
 # 开发环境
 npm run dev
@@ -76,6 +78,19 @@ npm run dev
 # 生产环境
 npm start
 ```
+
+#### HTTPS模式（推荐）
+```bash
+# 一键启动HTTPS服务器（自动生成SSL证书）
+npm run start:ssl      # 生产模式
+npm run start:ssl:dev  # 开发模式（热重载）
+
+# 或手动配置
+npm run ssl:generate   # 仅生成SSL证书
+npm start             # 启动服务器
+```
+
+> 📘 **HTTPS配置详情**: 查看 [HTTPS_SETUP.md](./HTTPS_SETUP.md) 了解完整的HTTPS配置指南。
 
 ## API文档
 

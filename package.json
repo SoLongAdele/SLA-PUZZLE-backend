@@ -12,7 +12,11 @@
     "migrate": "node src/scripts/migrate.js",
     "seed": "node src/scripts/seed.js",
     "verify": "node scripts/verify-config.js",
-    "setup": "npm run verify && npm run migrate && npm run seed"
+    "setup": "npm run verify && npm run migrate && npm run seed",
+    "ssl:generate": "node scripts/generate-ssl-cert.js",
+    "ssl:test": "node scripts/test-https.js",
+    "start:ssl": "./scripts/start-with-ssl.sh",
+    "start:ssl:dev": "./scripts/start-with-ssl.sh --dev"
   },
   "keywords": [
     "puzzle",
