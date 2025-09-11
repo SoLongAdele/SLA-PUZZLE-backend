@@ -36,10 +36,12 @@ app.use(morgan('combined', {
 
 // CORS配置 - 支持多个前端域名
 const allowedOrigins = [
-  'http://localhost:1420',  // Tauri开发环境
-  'http://localhost:5173',  // Vite开发服务器
-  'http://localhost:3000',  // 其他可能的开发端口
-  'http://localhost:4173',  // Vite预览服务器
+  'http://localhost:1420',    // Tauri开发环境
+  'http://localhost:5173',    // Vite开发服务器
+  'http://localhost:3000',    // 其他可能的开发端口
+  'http://localhost:4173',    // Vite预览服务器
+  'http://sla.edev.uno',      // 生产环境域名
+  'https://sla.edev.uno',     // HTTPS版本
 ];
 
 app.use(cors({
@@ -51,8 +53,12 @@ app.use(cors({
     if (allowedOrigins.indexOf(origin) !== -1) {
       callback(null, true);
     } else {
+      // 支持 Tauri 应用的自定义协议
+      if (origin && origin.startsWith('tauri://')) {
+        callback(null, true);
+      }
       // 在开发环境中，允许所有localhost请求
-      if ((process.env.NODE_ENV === 'development' || !process.env.NODE_ENV) && origin.includes('localhost')) {
+      else if ((process.env.NODE_ENV === 'development' || !process.env.NODE_ENV) && origin.includes('localhost')) {
         callback(null, true);
       } else {
         console.log('CORS blocked origin:', origin);
