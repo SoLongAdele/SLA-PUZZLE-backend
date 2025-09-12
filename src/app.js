@@ -47,7 +47,7 @@ const getCorsOrigins = () => {
     return [...new Set(corsOrigin.split(',').map(origin => origin.trim()).filter(Boolean))];
   }
   
-  // 默认配置
+  // 默认配置 - 支持Tauri桌面应用
   return [
     'http://localhost:1420',    // Tauri开发环境
     'http://localhost:5173',    // Vite开发服务器
@@ -55,6 +55,13 @@ const getCorsOrigins = () => {
     'http://localhost:4173',    // Vite预览服务器
     'http://sla.edev.uno',      // 生产环境域名
     'https://sla.edev.uno',     // HTTPS版本
+    // Tauri桌面应用支持
+    'tauri://localhost',        // Tauri本地协议
+    'tauri://localhost:1420',   // Tauri开发协议
+    'tauri://localhost:5173',   // Tauri Vite开发协议
+    'capacitor://localhost',    // Capacitor协议（备用）
+    'http://tauri.localhost',   // Tauri本地域名
+    'https://tauri.localhost',  // Tauri本地HTTPS域名
   ];
 };
 
@@ -75,9 +82,9 @@ app.use(cors({
   origin: function (origin, callback) {
     logger.info(`CORS请求 - Origin: ${origin || '无'}`);
     
-    // 允许没有origin的请求（如移动应用、Postman等）
+    // 允许没有origin的请求（如移动应用、Postman、桌面应用等）
     if (!origin) {
-      logger.info('CORS: 允许无Origin请求');
+      logger.info('CORS: 允许无Origin请求（桌面应用/移动应用）');
       return callback(null, true);
     }
     
@@ -87,8 +94,13 @@ app.use(cors({
       callback(null, true);
     } else {
       // 支持 Tauri 应用的自定义协议
-      if (origin && origin.startsWith('tauri://')) {
-        logger.info(`CORS: 允许Tauri协议 ${origin}`);
+      if (origin && (origin.startsWith('tauri://') || origin.startsWith('capacitor://'))) {
+        logger.info(`CORS: 允许桌面应用协议 ${origin}`);
+        callback(null, true);
+      }
+      // 支持 Tauri 本地域名
+      else if (origin && (origin.includes('tauri.localhost') || origin.includes('capacitor.localhost'))) {
+        logger.info(`CORS: 允许桌面应用本地域名 ${origin}`);
         callback(null, true);
       }
       // 在开发环境中，允许所有localhost请求
@@ -102,8 +114,17 @@ app.use(cors({
     }
   },
   credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+  allowedHeaders: [
+    'Content-Type', 
+    'Authorization', 
+    'X-Requested-With',
+    'Accept',
+    'Origin',
+    'Access-Control-Request-Method',
+    'Access-Control-Request-Headers'
+  ],
+  exposedHeaders: ['X-Total-Count', 'X-Page-Count'],
   preflightContinue: false,
   optionsSuccessStatus: 204
 }));

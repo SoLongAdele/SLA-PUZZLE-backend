@@ -20,6 +20,15 @@ const testOrigins = [
   'http://localhost:5173',
   'http://localhost:1420',
   'https://localhost:5173',
+  // Tauri桌面应用测试
+  'tauri://localhost',
+  'tauri://localhost:1420',
+  'tauri://localhost:5173',
+  'capacitor://localhost',
+  'http://tauri.localhost',
+  'https://tauri.localhost',
+  // 无Origin测试（桌面应用）
+  null,
 ];
 
 /**
